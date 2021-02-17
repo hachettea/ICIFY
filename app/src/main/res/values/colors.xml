@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="PrimaryText">#ff24B7B1</color>
+    <color name="UnactiveMenu">#7F24B7B1</color>
+    <color name="SecondaryTitle">#FF000000</color>
+    <color name="Background">#FFFFFAFA</color>
+    <color name="BoutonSecondaire">#1C2226</color>
+</resources>
