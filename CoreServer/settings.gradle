@@ -1,0 +1,24 @@
+//
+// Copyright (c) ZeroC, Inc. All rights reserved.
+//
+
+// Map of dir->subdir for each of the demos.
+
+
+
+
+    def dir = 'src' 
+
+    
+        // abc_def -> AbcDef
+        def name = 'src'
+
+        // A project in directory xyz is demoXyzAbcDef
+        def projectName = ":CoreServer${dir.capitalize()}${name}"
+        include projectName
+
+        // The directory is <dir>/<name>.
+        project("${projectName}").projectDir = new File("${dir}")
+    
+
+

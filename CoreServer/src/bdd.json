@@ -1,0 +1,12 @@
+[
+    {
+        "musique":{"picture":"imageMachineGunKelly.jpg","title":"My ex's best friend(with blackbear)", "artiste":"Machine Gun Kelly","album":"Ticket To my Downfall"}
+    },
+    { 
+        "musique":{"picture":"imageTheScore.jpg","title":"Be Your Friend", "artiste":"The Score","album":"Carry On"}
+    },
+    {
+        "musique":{"picture":"imageTonesAndI.jpg","title":"Ur So Fucking Cool", "artiste":"Tones and I","album":"Ur So Fucking Cool"} 
+    }
+]
+    

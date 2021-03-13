@@ -1,0 +1,65 @@
+//
+// Copyright (c) ZeroC, Inc. All rights reserved.
+//
+/*
+subprojects {
+
+    project.group = "com.zeroc"
+    apply plugin: 'java'
+    apply from: "$rootProject.projectDir/gradle/ice.gradle"
+
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:-options"
+        options.encoding = "UTF-8"
+    }
+}
+
+apply from: "$rootProject.projectDir/Ice/build.gradle"
+*/
+
+//
+// Copyright (c) ZeroC, Inc. All rights reserved.
+//
+
+
+subprojects {
+
+    project.group = "com.zeroc"
+    apply plugin: 'java'
+    apply from: "$rootProject.projectDir/gradle/ice.gradle"
+
+    tasks.withType(JavaCompile) {
+        options.compilerArgs << "-Xlint:unchecked" << "-Xlint:-options"
+        options.encoding = "UTF-8"
+    }
+
+
+    slice {
+            java {
+                include = ["${projectDir}"]
+                srcDir = '.'
+            }
+        }
+
+        sourceSets {
+            main {
+                java {
+                    srcDir '.'
+                }
+            }
+        }
+
+        dependencies {
+            implementation localDependency("ice")
+            compile 'com.googlecode.json-simple:json-simple:1.1.1'
+            runtimeOnly localDependency("icessl")
+            runtimeOnly "org.apache.commons:commons-compress:1.14"
+        }
+
+        // Don't create the default jar.
+        jar.enabled = false
+
+        demoJar("client")
+        demoJar("server")
+}
+
