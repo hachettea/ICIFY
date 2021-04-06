@@ -7,16 +7,26 @@ import androidx.core.content.ContextCompat;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.DataInputStream;
@@ -27,33 +37,66 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
     //Variable
     ImageButton btnRecord;
+    ImageButton btnPlay;
+    ImageButton btnStop;
     private AudioRecord recorder = null;
     private int bufferSize = 0;
     private Thread recordingThread = null;
-    MediaRecorder mediaRecorder;
+
     private static String fileName = null;
     public static final int REQUEST_AUDIO_PERMISSION_CODE = 1;
     private boolean isRecording = false;
+    private boolean isPlaying = false;
+    MediaPlayer mediaPlayer;
+    ListView listView;
+    File[] musiques;
+    TextView title;
+    TextView artist;
+    TextView chrono;
+    ImageView cover;
+    long timerMusique;
+    private CountDownTimer countDown;
+    boolean timerRunning = false;
+    boolean paused = false;
+    int length = 0;
+
+    MediaMetadataRetriever metaRetriever ;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        metaRetriever = new MediaMetadataRetriever();
         ActivityCompat.requestPermissions(this, new String[]{ Manifest.permission.RECORD_AUDIO },PackageManager.PERMISSION_GRANTED);
         ActivityCompat.requestPermissions(this, new String[]{ Manifest.permission.WRITE_EXTERNAL_STORAGE },PackageManager.PERMISSION_GRANTED);
         ActivityCompat.requestPermissions(this, new String[]{ Manifest.permission.READ_EXTERNAL_STORAGE },PackageManager.PERMISSION_GRANTED);
 
         btnRecord = findViewById(R.id.btnRecord);
+        btnPlay = findViewById(R.id.btnPlay);
+        btnPlay.setEnabled(false);
+
+        btnStop = findViewById(R.id.btnStop);
+        btnStop.setEnabled(false);
+        btnStop.setVisibility(View.GONE);
 
         bufferSize = AudioRecord.getMinBufferSize(8000, AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT);
+
+        listView = (ListView)findViewById(R.id.listMusique);
+        title = (TextView)findViewById(R.id.title);
+        artist = (TextView)findViewById(R.id.artist);
+        chrono = (TextView)findViewById(R.id.chrono);
+        cover = (ImageView)findViewById(R.id.cover);
+
+        initializeListMusiques();
     }
 
     public void onClick(View v){
@@ -67,10 +110,42 @@ public class MainActivity extends AppCompatActivity {
             stopRecording();
             btnRecord.setImageResource(R.drawable.microphone_foreground);
         }
-        else if (v.getId() == R.id.btnPlay)
+        else if (v.getId() == R.id.btnPlay && isPlaying == false)
         {
-            /**Todo*/
+            play(fileName);
+            btnPlay.setImageResource(R.drawable.pause_foreground);
+            btnStop.setEnabled(true);
+            btnStop.setVisibility(View.VISIBLE);
         }
+        else if (v.getId() == R.id.btnPlay && isPlaying == true && paused == true)
+        {
+            musicResume();
+            btnPlay.setImageResource(R.drawable.pause_foreground);
+            btnStop.setEnabled(true);
+            btnStop.setVisibility(View.VISIBLE);
+        }
+        else if (v.getId() == R.id.btnPlay && isPlaying == true )
+        {
+            pausesMusique();
+            btnPlay.setImageResource(R.drawable.play_foreground);
+            btnStop.setEnabled(false);
+            btnStop.setVisibility(View.GONE);
+        }
+        else if (v.getId() == R.id.btnStop && isPlaying == true )
+        {
+            stopPlaying();
+            btnPlay.setImageResource(R.drawable.play_foreground);
+            btnStop.setEnabled(false);
+            btnStop.setVisibility(View.GONE);
+        }
+    }
+
+    private void stopPlaying() {
+        mediaPlayer.stop();
+        mediaPlayer.release();
+        stopTimer();
+        Toast.makeText(this, "Music stopped", Toast.LENGTH_SHORT).show();
+        isPlaying = false;
     }
 
     @Override
@@ -135,7 +210,19 @@ public class MainActivity extends AppCompatActivity {
         return (file.getAbsolutePath() + "/" + "record_temp.raw");
     }
 
+    public void pausesMusique(){
+        paused = true;
+        mediaPlayer.pause();
+        stopTimer();
+        length = mediaPlayer.getCurrentPosition();
+    }
 
+    public void musicResume(){
+        paused = false;
+        mediaPlayer.seekTo(length);
+        mediaPlayer.start();
+        startTimer();
+    }
 
     private void record() {
         if (CheckPermissions()) {
@@ -158,25 +245,7 @@ public class MainActivity extends AppCompatActivity {
 
             recordingThread.start();
 
-            /*fileName = Environment.getExternalStorageDirectory().getAbsolutePath();
-            fileName += "/AudioRecording.m4a";
 
-            mediaRecorder = new MediaRecorder();
-
-            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-
-            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-
-            mediaRecorder.setOutputFile(fileName);
-            try {
-                mediaRecorder.prepare();
-            } catch (IOException e) {
-                Log.e("TAG", "prepare() failed");
-            }
-            mediaRecorder.start();
-            Toast.makeText(this, "Recording...", Toast.LENGTH_LONG).show();*/
         } else {
             RequestPermissions();
         }
@@ -262,7 +331,7 @@ public class MainActivity extends AppCompatActivity {
             totalAudioLen = in.getChannel().size();
             totalDataLen = totalAudioLen + 36;
 
-            Log.d("fileSize","File size: " + totalDataLen);
+
 
             WriteWaveFileHeader(out, totalAudioLen, totalDataLen, longSampleRate, channels, byteRate);
 
@@ -278,6 +347,125 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
+
+
+    private void play(String fileName) {
+        mediaPlayer = new MediaPlayer();
+        DataInputStream dis1 = null;
+        byte[] datainBytes1 = null;
+        try {
+            dis1 = new DataInputStream(new FileInputStream("/storage/emulated/0/Music/"+fileName));
+            datainBytes1 = new byte[dis1.available()];
+            dis1.readFully(datainBytes1);
+            dis1.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        float[] dst = new float[0];
+        if(datainBytes1 != null) {
+            final FloatBuffer fb = ByteBuffer.wrap(datainBytes1).asFloatBuffer();
+            dst = new float[fb.capacity()];
+            fb.get(dst); // Copy the contents of the FloatBuffer into dst
+        }
+
+
+        try {
+
+            mediaPlayer.setDataSource("/storage/emulated/0/Music/"+fileName);
+            metaRetriever = new MediaMetadataRetriever();
+
+            metaRetriever.setDataSource("/storage/emulated/0/Music/"+fileName);
+            String title = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
+            String artist = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
+            String duration = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+            timerMusique = Long.parseLong(duration);
+            startTimer();
+            long timerMusiqueAffichage = timerMusique /1000;
+            String chrono = String.format("%d:%02d:%02d",timerMusiqueAffichage / 3600,(timerMusiqueAffichage % 3600) / 60, timerMusiqueAffichage % 60);
+            this.title.setText(title);
+            this.artist.setText(artist);
+            this.chrono.setText(chrono);
+
+
+
+            byte [] data = metaRetriever.getEmbeddedPicture();
+
+            if(data != null)
+            {
+                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+                cover.setImageBitmap(bitmap); //associated cover art in bitmap
+            }
+            else
+            {
+                cover.setImageResource(R.drawable.cover); //any default cover resourse folder
+            }
+
+            cover.setAdjustViewBounds(true);
+            cover.setLayoutParams(new LinearLayout.LayoutParams(320, 320));
+
+            mediaPlayer.prepare();
+            mediaPlayer.start();
+
+            isPlaying = true;
+            btnPlay.setImageResource(R.drawable.pause_foreground);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        Toast.makeText(this, "Playing file", Toast.LENGTH_SHORT).show();
+    }
+
+    public void startTimer()
+    {
+        stopTimer();
+        countDown = new CountDownTimer(timerMusique,1000){
+
+            @Override
+            public void onTick(long l) {
+                timerMusique -= 1000;
+                updateTimer();
+            }
+
+            @Override
+            public void onFinish() {
+
+            }
+        }.start();
+
+        timerRunning = true;
+    }
+
+    public void stopTimer()
+    {
+        if(countDown == null)
+        {
+
+        }else
+        {
+
+            countDown.cancel();
+
+            timerRunning = false;
+        }
+    }
+
+    public void updateTimer()
+    {
+        int minutes = (int) timerMusique / 60000;
+        int seconds = (int) timerMusique % 60000 / 1000;
+
+        String timeLeftTxt;
+
+        timeLeftTxt = "" +minutes;
+        timeLeftTxt +=":";
+        if(seconds < 10) timeLeftTxt += "0";
+        timeLeftTxt += seconds;
+        chrono.setText(timeLeftTxt);
+    }
+
 
     private void WriteWaveFileHeader(FileOutputStream out, long totalAudioLen, long totalDataLen, long longSampleRate,
                                      int channels, long byteRate) throws IOException {
@@ -332,5 +520,41 @@ public class MainActivity extends AppCompatActivity {
         out.write(header, 0, 44);
     }
 
+    private void initializeListMusiques()
+    {
+        List<String> list = new ArrayList<String>();
+        String path = Environment.getExternalStorageDirectory().getPath();
+        path += "/Music/";
+        File file = new File(path);
+        musiques = file.listFiles();
+
+
+        for(int i=0;i<musiques.length;i++)
+        {
+
+            metaRetriever.setDataSource(path+"/"+musiques[i].getName());
+            String title = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
+            String duration = metaRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+            list.add(title);
+
+
+
+            listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+                public void onItemClick(AdapterView<?> listView, View itemView, int itemPosition, long itemId)
+                {
+                    fileName = musiques[itemPosition].getName();
+                    stopTimer();
+                    btnPlay.setEnabled(true);
+                    btnStop.setEnabled(true);
+                    paused = false;
+                    btnStop.setVisibility(View.VISIBLE);
+                    play(fileName);
+                }
+            });
+        }
+
+        ArrayAdapter<String> arrayAdapter = new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,list);
+        listView.setAdapter(arrayAdapter);
+    }
 
 }
